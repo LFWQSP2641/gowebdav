@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Repo
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Initial Building Dependencies
       env:
         DEBIAN_FRONTEND: noninteractive
@@ -17,7 +17,7 @@ jobs:
         sudo -E apt update -y
         sudo -E apt install -y coreutils curl jq openssl tar zip
     - name: Initial Golang Toolchain
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v6
       with:
         go-version: 'stable'
     - name: Build Binaries
