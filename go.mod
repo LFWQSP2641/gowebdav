@@ -1,4 +1,4 @@
-module github.com/1715173329/gowebdav
+module github.com/LFWQSP2641/gowebdav
 
 go 1.25.2
 

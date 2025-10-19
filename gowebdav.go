@@ -5,10 +5,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -41,10 +39,21 @@ type SkipBrokenLink struct {
 func (d SkipBrokenLink) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	fileinfo, err := d.Dir.Stat(ctx, name)
 	if err != nil && os.IsNotExist(err) {
-		return nil, filepath.SkipDir
+		// Return the original error, not filepath.SkipDir
+		// filepath.SkipDir can cause issues with WebDAV MOVE operations
+		return nil, os.ErrNotExist
 	}
 	return fileinfo, err
 }
+
+func (d SkipBrokenLink) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
+	file, err := d.Dir.OpenFile(ctx, name, flag, perm)
+	if err != nil && os.IsNotExist(err) {
+		return nil, os.ErrNotExist
+	}
+	return file, err
+}
+
 func main() {
 	flag.Parse()
 	fs := &webdav.Handler{
@@ -64,7 +73,9 @@ func main() {
 				return
 			}
 		}
-		if req.Method == "GET" && handleDirList(fs.FileSystem, w, req) {
+		// Only show directory listing for browser GET requests, not WebDAV clients
+		// WebDAV clients typically send Depth header or User-Agent with "WebDAV" in it
+		if req.Method == "GET" && req.Header.Get("Depth") == "" && req.Header.Get("Translate") == "" && handleDirList(fs.FileSystem, w, req) {
 			return
 		}
 		if *flagReadonly {
@@ -85,24 +96,41 @@ func main() {
 
 func handleDirList(fs webdav.FileSystem, w http.ResponseWriter, req *http.Request) bool {
 	ctx := context.Background()
+
+	// First check if the path exists and is a directory without opening it
+	fi, err := fs.Stat(ctx, req.URL.Path)
+	if err != nil {
+		return false
+	}
+
+	// Only handle directory listing, not files
+	if !fi.IsDir() {
+		return false
+	}
+
+	// Ensure the path ends with / for directories
+	if !strings.HasSuffix(req.URL.Path, "/") {
+		http.Redirect(w, req, req.URL.Path+"/", 302)
+		return true
+	}
+
+	// Open the directory
 	f, err := fs.OpenFile(ctx, req.URL.Path, os.O_RDONLY, 0)
 	if err != nil {
 		return false
 	}
 	defer f.Close()
-	if fi, _ := f.Stat(); fi != nil && !fi.IsDir() {
-		return false
-	}
-	if !strings.HasSuffix(req.URL.Path, "/") {
-		http.Redirect(w, req, req.URL.Path+"/", 302)
-		return true
-	}
+
+	// Read directory contents
 	dirs, err := f.Readdir(-1)
 	if err != nil {
-		log.Print(w, "Error reading directory", http.StatusInternalServerError)
-		return false
+		http.Error(w, "Error reading directory", http.StatusInternalServerError)
+		return true // Return true because we've already written the response
 	}
+
+	// Send HTML directory listing
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "<pre>\n")
 	for _, d := range dirs {
 		link := d.Name()
