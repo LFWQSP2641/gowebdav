@@ -26,9 +26,9 @@ var (
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of WebDAV Server\n")
+		_, _ = fmt.Fprintf(os.Stderr, "Usage of WebDAV Server\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nReport bugs to <chaishushan@gmail.com>.\n")
+		_, _ = fmt.Fprintf(os.Stderr, "\nReport bugs to <chaishushan@gmail.com>.\n")
 	}
 }
 
@@ -88,9 +88,9 @@ func main() {
 		fs.ServeHTTP(w, req)
 	})
 	if *flagHttpsMode {
-		http.ListenAndServeTLS(*flagHttpAddr, *flagCertFile, *flagKeyFile, nil)
+		_ = http.ListenAndServeTLS(*flagHttpAddr, *flagCertFile, *flagKeyFile, nil)
 	} else {
-		http.ListenAndServe(*flagHttpAddr, nil)
+		_ = http.ListenAndServe(*flagHttpAddr, nil)
 	}
 }
 
@@ -119,7 +119,7 @@ func handleDirList(fs webdav.FileSystem, w http.ResponseWriter, req *http.Reques
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Read directory contents
 	dirs, err := f.Readdir(-1)
@@ -131,7 +131,7 @@ func handleDirList(fs webdav.FileSystem, w http.ResponseWriter, req *http.Reques
 	// Send HTML directory listing
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "<pre>\n")
+	_, _ = fmt.Fprintf(w, "<pre>\n")
 	for _, d := range dirs {
 		link := d.Name()
 		if d.IsDir() {
@@ -141,8 +141,8 @@ func handleDirList(fs webdav.FileSystem, w http.ResponseWriter, req *http.Reques
 		if (d.Mode() & os.ModeSymlink) == os.ModeSymlink {
 			name += "@"
 		}
-		fmt.Fprintf(w, "<a href=\"%s\">%s</a>\n", link, name)
+		_, _ = fmt.Fprintf(w, "<a href=\"%s\">%s</a>\n", link, name)
 	}
-	fmt.Fprintf(w, "</pre>\n")
+	_, _ = fmt.Fprintf(w, "</pre>\n")
 	return true
 }
